@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('peminjamans', function (Blueprint $table) {
+        Schema::table('peminjaman', function (Blueprint $table) {
             $table->unsignedInteger('jumlah_pinjam')->default(1)->after('alat_dipinjam');
         });
     }
@@ -21,7 +21,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('peminjamans', function (Blueprint $table) {
+        Schema::table('peminjaman', function (Blueprint $table) {
             $table->dropColumn('jumlah_pinjam');
         });
     }

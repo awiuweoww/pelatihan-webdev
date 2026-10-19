@@ -1,3 +1,12 @@
+{{--
+ * Author      : Chandra
+ * Version     : 0.1.0
+ * Created     : 17-10-2026
+ * Description : Halaman alternatif / master tampilan peminjaman alat dan monitoring ketersediaan stok.
+ *
+ * Changelog:
+ * - 0.1.0 (17-10-2026): Inisialisasi view peminjaman cadangan / template master.
+--}}
 @extends('layouts.admin')
 
 @section('content')
@@ -16,7 +25,7 @@
         </a>
     </div>
 
-    <!-- Alert Notifikasi Flash Session -->
+    <!-- Alert Notifikasi Sukses -->
     @if(session('success'))
         <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
             <i class="fas fa-check-circle mr-1"></i> {{ session('success') }}
@@ -26,6 +35,7 @@
         </div>
     @endif
 
+    <!-- Alert Notifikasi Error -->
     @if(session('error'))
         <div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
             <i class="fas fa-exclamation-circle mr-1"></i> {{ session('error') }}
@@ -175,6 +185,7 @@
                         <tr>
                             <td class="text-center text-muted font-weight-bold">{{ $peminjamans->firstItem() + $index }}</td>
                             <td><strong class="text-primary">{{ $peminjaman->kode_transaksi }}</strong></td>
+                            {{-- [KEAMANAN - SANITASI XSS]: Sintaks kurung kurawal ganda {{ ... }} otomatis menjalankan htmlspecialchars() via helper e(), mencegah injeksi script/HTML berbahaya --}}
                             <td class="font-weight-bold text-gray-800">{{ $peminjaman->nama_peminjam }}</td>
                             <td><span class="badge badge-light border text-dark">{{ $peminjaman->alat_dipinjam }}</span></td>
                             <td class="text-center text-nowrap">
@@ -199,6 +210,7 @@
                                         <i class="fas fa-edit"></i> Edit
                                     </a>
                                     <form action="{{ route('peminjaman.destroy', $peminjaman) }}" method="POST" class="d-inline m-0 p-0" onsubmit="return confirm('Apakah Anda yakin ingin menghapus data transaksi peminjaman ini?');">
+                                        {{-- [KEAMANAN - CSRF TOKEN]: Mencegah serangan Cross-Site Request Forgery dengan generate hidden input _token yang divalidasi middleware Laravel --}}
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="btn btn-danger btn-sm shadow-sm" title="Hapus Transaksi">

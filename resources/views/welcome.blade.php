@@ -1,3 +1,12 @@
+{{--
+ * Author      : Chandra
+ * Version     : 0.1.0
+ * Created     : 17-10-2026
+ * Description : Tampilan dashboard utama dengan ringkasan statistik dan overview sistem.
+ *
+ * Changelog:
+ * - 0.1.0 (17-10-2026): Inisialisasi halaman dashboard utama dengan kartu ringkasan SB Admin 2.
+--}}
 @extends('layouts.admin')
 
 @section('content')

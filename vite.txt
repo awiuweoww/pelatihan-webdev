@@ -1,0 +1,469 @@
+================================================================================
+PANDUAN LENGKAP: MENAMBAHKAN FITUR SIDEBAR "DAFTAR TRANSAKSI"
+Tabel: Nama Peminjam, Barang Dipinjam, Total Barang, Total Harga
+================================================================================
+
+Panduan ini berisi instruksi bertahap. Cukup ikuti urutan:
+1. Jalankan script/command di terminal.
+2. Buka PATH FILE yang tertera di header.
+3. Salin-tempel (copy-paste) kodenya.
+4. Lanjut ke langkah berikutnya.
+
+--------------------------------------------------------------------------------
+LANGKAH 1: MENAMBAHKAN KOLOM HARGA KE DATABASE (MIGRATION)
+--------------------------------------------------------------------------------
+Jalankan perintah ini di terminal untuk membuat file migrasi baru:
+> php artisan make:migration add_harga_to_peminjamans_table
+
+Buka file migrasi baru yang baru saja digenerate di folder database/migrations/.
+[PATH FILE: database/migrations/2026_10_19_000000_add_harga_to_peminjamans_table.php]
+(Catatan: Sesuaikan nama file dengan timestamp yang digenerate sistem Anda)
+
+KODE LENGKAP:
+--------------------------------------------------------------------------------
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Menambahkan kolom harga satuan dan total harga transaksi.
+     */
+    public function up(): void
+    {
+        Schema::table('peminjaman', function (Blueprint $table) {
+            $table->decimal('harga_satuan', 12, 2)->default(50000)->after('jumlah_pinjam');
+            $table->decimal('total_harga', 12, 2)->default(50000)->after('harga_satuan');
+        });
+    }
+
+    /**
+     * Rollback penghapusan kolom.
+     */
+    public function down(): void
+    {
+        Schema::table('peminjaman', function (Blueprint $table) {
+            $table->dropColumn(['harga_satuan', 'total_harga']);
+        });
+    }
+};
+--------------------------------------------------------------------------------
+
+Setelah menyimpan kode di atas, jalankan perintah eksekusi migrasi di terminal:
+> php artisan migrate
+
+
+--------------------------------------------------------------------------------
+LANGKAH 2: UPDATE MODEL ELOQUENT (MASS ASSIGNMENT & CASTS)
+--------------------------------------------------------------------------------
+Buka file model Peminjaman untuk mendaftarkan kolom baru ke $fillable:
+[PATH FILE: app/Models/Peminjaman.php]
+
+KODE LENGKAP:
+--------------------------------------------------------------------------------
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Peminjaman extends Model
+{
+    use HasFactory;
+
+    protected $table = 'peminjaman';
+
+    // [KEAMANAN - PROTEKSI MASS ASSIGNMENT]:
+    // Kolom harga_satuan dan total_harga didaftarkan ke $fillable agar aman dari manipulasi input
+    protected $fillable = [
+        'kode_transaksi',
+        'nama_peminjam',
+        'alat_dipinjam',
+        'jumlah_pinjam',
+        'harga_satuan',
+        'total_harga',
+        'tanggal_pinjam',
+        'tenggat_kembali',
+        'status',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'jumlah_pinjam' => 'integer',
+            'harga_satuan'  => 'decimal:2',
+            'total_harga'   => 'decimal:2',
+            'tanggal_pinjam' => 'date',
+            'tenggat_kembali' => 'date',
+        ];
+    }
+}
+--------------------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------------
+LANGKAH 3: MENENTUKAN HARGA PER ALAT & LOGIKA HITUNG DI CONTROLLER
+--------------------------------------------------------------------------------
+Buka file controller peminjaman:
+[PATH FILE: app/Http/Controllers/PeminjamanController.php]
+
+Lakukan 2 penyesuaian:
+1. Di method getMasterAlat(), tambahkan atribut 'harga' pada tiap barang:
+--------------------------------------------------------------------------------
+    private function getMasterAlat(): array
+    {
+        return [
+            ['nama' => 'Tenda Dome 4P',    'total' => 10, 'harga' => 60000],
+            ['nama' => 'Carrier 60L',      'total' => 10, 'harga' => 45000],
+            ['nama' => 'Kompor & Nesting', 'total' => 10, 'harga' => 25000],
+            ['nama' => 'Sleeping Bag',     'total' => 10, 'harga' => 20000],
+            ['nama' => 'Trekking Pole',    'total' => 10, 'harga' => 15000],
+        ];
+    }
+--------------------------------------------------------------------------------
+
+2. Di method store(), hitung harga (Jumlah Pinjam x Harga Satuan) sebelum disimpan ke database:
+--------------------------------------------------------------------------------
+    public function store(PeminjamanRequest $request)
+    {
+        $alat = $request->alat_dipinjam;
+        $qty  = (int) $request->jumlah_pinjam;
+
+        // [LOGIKA HARGA]: Ambil tarif sewa per alat lalu kalikan dengan kuantitas
+        $hargaMap    = array_column($this->getMasterAlat(), 'harga', 'nama');
+        $hargaSatuan = $hargaMap[$alat] ?? 50000;
+        $totalHarga  = $qty * $hargaSatuan;
+
+        $masterList = array_column($this->getMasterAlat(), 'total', 'nama');
+        if (isset($masterList[$alat])) {
+            $currentDipinjam = (int) Peminjaman::where('alat_dipinjam', $alat)
+                ->where('status', 'Dipinjam')
+                ->sum('jumlah_pinjam');
+
+            $sisaStok = max(0, $masterList[$alat] - $currentDipinjam);
+
+            if ($request->status === 'Dipinjam' && ($currentDipinjam + $qty) > $masterList[$alat]) {
+                return back()
+                    ->withInput()
+                    ->with('error', "Stok tidak mencukupi! Sisa stok untuk alat \"{$alat}\" hanya tersisa {$sisaStok} unit (Anda meminta {$qty} unit).");
+            }
+        }
+
+        $kode = $request->filled('kode_transaksi') ? $request->kode_transaksi : null;
+        if (!$kode) {
+            $last = Peminjaman::latest('id')->first();
+            $nextNum = $last ? ($last->id + 1) : 1;
+            $kode = 'TRX-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
+        }
+
+        // [KEAMANAN - SQL INJECTION & MASS ASSIGNMENT]:
+        // Simpan transaksi BESERTA harga satuan dan total harga ke database
+        Peminjaman::create([
+            'kode_transaksi'  => $kode,
+            'nama_peminjam'   => $request->nama_peminjam,
+            'alat_dipinjam'   => $request->alat_dipinjam,
+            'jumlah_pinjam'   => $qty,
+            'harga_satuan'    => $hargaSatuan,
+            'total_harga'     => $totalHarga,
+            'tanggal_pinjam'  => $request->tanggal_pinjam,
+            'tenggat_kembali' => $request->tenggat_kembali,
+            'status'          => $request->status ?? 'Dipinjam',
+        ]);
+
+        return to_route('peminjaman.index')->with('success', 'Data transaksi peminjaman berhasil ditambahkan!');
+    }
+--------------------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------------
+LANGKAH 4: MEMBUAT CONTROLLER KHUSUS DAFTAR TRANSAKSI
+--------------------------------------------------------------------------------
+Jalankan perintah ini di terminal untuk membuat TransaksiController:
+> php artisan make:controller TransaksiController
+
+Buka file controller yang baru dibuat:
+[PATH FILE: app/Http/Controllers/TransaksiController.php]
+
+KODE LENGKAP:
+--------------------------------------------------------------------------------
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Peminjaman;
+use Illuminate\Http\Request;
+
+class TransaksiController extends Controller
+{
+    /**
+     * Menampilkan daftar transaksi peminjaman lengkap dengan total harga.
+     * Kolom: Nama Peminjam, Barang Dipinjam, Total Barang, Total Harga.
+     */
+    public function index()
+    {
+        // [KEAMANAN - SQL INJECTION]: Eloquent latest() dan paginate() menggunakan prepared statements
+        $transaksis = Peminjaman::latest()->paginate(10);
+
+        // Menghitung akumulasi statistik ringkasan transaksi
+        $totalPendapatan = Peminjaman::sum('total_harga');
+        $totalTransaksi  = Peminjaman::count();
+        $totalUnitSewa   = Peminjaman::sum('jumlah_pinjam');
+
+        return view('transaksi.index', compact('transaksis', 'totalPendapatan', 'totalTransaksi', 'totalUnitSewa'));
+    }
+}
+--------------------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------------
+LANGKAH 4: MENDAFTARKAN ROUTE WEB BARU
+--------------------------------------------------------------------------------
+Buka file route web:
+[PATH FILE: routes/web.php]
+
+Tambahkan rute untuk transaksi. Berikut isi file routes/web.php lengkapnya:
+KODE LENGKAP:
+--------------------------------------------------------------------------------
+<?php
+
+use App\Http\Controllers\PeminjamanController;
+use App\Http\Controllers\TransaksiController;
+use App\Http\Controllers\UserController;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/', function () {
+    return view('welcome');
+});
+
+Route::resource('users', UserController::class)->except(['show']);
+Route::resource('peminjaman', PeminjamanController::class)->except(['show']);
+
+// Rute baru untuk menu Daftar Transaksi
+Route::get('transaksi', [TransaksiController::class, 'index'])->name('transaksi.index');
+--------------------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------------
+LANGKAH 5: MEMBUAT TAMPILAN VIEW BLADE (TABEL TRANSAKSI)
+--------------------------------------------------------------------------------
+1. Buat folder baru bernama "transaksi" di dalam resources/views/
+2. Buat file baru bernama "index.blade.php" di dalam folder tersebut:
+[PATH FILE: resources/views/transaksi/index.blade.php]
+
+KODE LENGKAP:
+--------------------------------------------------------------------------------
+@extends('layouts.admin')
+
+@section('content')
+<div class="container-fluid">
+
+    <!-- Header Judul Halaman -->
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800 font-weight-bold">Daftar Transaksi Peminjaman</h1>
+            <p class="text-muted small mb-0">Laporan transaksi, kuantitas barang disewa, dan akumulasi total harga.</p>
+        </div>
+        <a href="{{ route('peminjaman.index') }}" class="btn btn-sm btn-secondary shadow-sm">
+            <i class="fas fa-arrow-left fa-sm mr-1"></i> Kembali ke Monitoring Alat
+        </a>
+    </div>
+
+    <!-- Cards Ringkasan Metrik Transaksi -->
+    <div class="row mb-4">
+        <div class="col-xl-4 col-md-6 mb-3">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Transaksi</div>
+                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ $totalTransaksi }} Transaksi</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-4 col-md-6 mb-3">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Total Barang Disewa</div>
+                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ $totalUnitSewa }} Unit</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-4 col-md-6 mb-3">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Total Estimasi Harga</div>
+                    <div class="h5 mb-0 font-weight-bold text-gray-800">Rp {{ number_format($totalPendapatan, 0, ',', '.') }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card Tabel Daftar Transaksi -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">Rekapitulasi Transaksi</h6>
+            <span class="badge badge-light border">Halaman {{ $transaksis->currentPage() }} dari {{ $transaksis->lastPage() }}</span>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover mb-0" id="tabelTransaksi" width="100%" cellspacing="0">
+                    <thead class="thead-light">
+                        <tr>
+                            <th class="text-center" style="width: 50px;">No</th>
+                            <th style="width: 120px;">Kode TRX</th>
+                            <th>Nama Peminjam</th>
+                            <th>Barang Dipinjam</th>
+                            <th class="text-center" style="width: 120px;">Total Barang</th>
+                            <th class="text-right" style="width: 160px;">Total Harga</th>
+                            <th class="text-center" style="width: 120px;">Status</th>
+                            <th class="text-center" style="width: 140px;">Tgl Pinjam</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($transaksis as $index => $item)
+                        <tr>
+                            <td class="text-center text-muted font-weight-bold">{{ $transaksis->firstItem() + $index }}</td>
+                            <td><strong class="text-primary">{{ $item->kode_transaksi }}</strong></td>
+                            
+                            {{-- [KEAMANAN - SANITASI XSS]: Menggunakan kurung kurawal ganda {{ ... }} untuk auto-escaping htmlspecialchars --}}
+                            <td class="font-weight-bold text-gray-800">{{ $item->nama_peminjam }}</td>
+                            
+                            <td>
+                                <span class="badge badge-light border text-dark">{{ $item->alat_dipinjam }}</span>
+                            </td>
+                            
+                            <td class="text-center">
+                                <span class="badge badge-secondary px-2 py-1 font-weight-bold">{{ $item->jumlah_pinjam }} Unit</span>
+                            </td>
+                            
+                            <td class="text-right font-weight-bold text-success">
+                                Rp {{ number_format($item->total_harga ?? ($item->jumlah_pinjam * 50000), 0, ',', '.') }}
+                            </td>
+                            
+                            <td class="text-center">
+                                @if($item->status == 'Dipinjam')
+                                    <span class="badge badge-warning px-2 py-1"><i class="fas fa-clock mr-1"></i> Dipinjam</span>
+                                @else
+                                    <span class="badge badge-success px-2 py-1"><i class="fas fa-check mr-1"></i> Dikembalikan</span>
+                                @endif
+                            </td>
+                            
+                            <td class="text-center text-nowrap">
+                                {{ $item->tanggal_pinjam ? \Carbon\Carbon::parse($item->tanggal_pinjam)->translatedFormat('d M Y') : '-' }}
+                            </td>
+                        </tr>
+                        @empty
+                        <tr>
+                            <td colspan="8" class="text-center py-5">
+                                <i class="fas fa-receipt fa-3x text-gray-300 mb-3 d-block"></i>
+                                <h5 class="text-gray-800 font-weight-bold">Belum Ada Transaksi Tercatat</h5>
+                                <p class="text-muted mb-0">Data transaksi akan muncul otomatis setelah pengguna melakukan peminjaman.</p>
+                            </td>
+                        </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Links -->
+            <div class="mt-4 d-flex justify-content-end">
+                {{ $transaksis->links() }}
+            </div>
+        </div>
+    </div>
+
+</div>
+@endsection
+--------------------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------------
+LANGKAH 6: MENAMBAHKAN MENU "DAFTAR TRANSAKSI" KE SIDEBAR
+--------------------------------------------------------------------------------
+Buka file sidebar navigasi:
+[PATH FILE: resources/views/includes/sidebar.blade.php]
+
+Cari bagian menu "Peminjaman Alat", lalu tambahkan item baru di bawahnya:
+KODE LENGKAP:
+--------------------------------------------------------------------------------
+{{-- Komponen Sidebar Navigasi --}}
+<ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
+
+    <!-- Sidebar - Brand -->
+    <a class="sidebar-brand d-flex align-items-center justify-content-center" href="/">
+        <div class="sidebar-brand-icon rotate-n-15">
+            <i class="fas fa-laugh-wink"></i>
+        </div>
+        <div class="sidebar-brand-text mx-3">SB Admin <sup>2</sup></div>
+    </a>
+
+    <hr class="sidebar-divider my-0">
+
+    <!-- Nav Item - Dashboard -->
+    <li class="nav-item {{ request()->is('/') ? 'active' : '' }}">
+        <a class="nav-link" href="/">
+            <i class="fas fa-fw fa-tachometer-alt"></i>
+            <span>Dashboard</span>
+        </a>
+    </li>
+
+    <hr class="sidebar-divider">
+
+    <!-- Nav Item - User -->
+    <li class="nav-item {{ request()->is('users*') ? 'active' : '' }}">
+        <a class="nav-link" href="{{ route('users.index') }}">
+            <i class="fas fa-fw fa-user"></i>
+            <span>User</span>
+        </a>
+    </li>
+
+    <!-- Nav Item - Peminjaman Alat -->
+    <li class="nav-item {{ request()->is('peminjaman*') ? 'active' : '' }}">
+        <a class="nav-link" href="{{ route('peminjaman.index') }}">
+            <i class="bi bi-backpack-fill me-1"></i>
+            <span>Peminjaman Alat</span>
+        </a>
+    </li>
+
+    <!-- Nav Item BARU: Daftar Transaksi -->
+    <li class="nav-item {{ request()->is('transaksi*') ? 'active' : '' }}">
+        <a class="nav-link" href="{{ route('transaksi.index') }}">
+            <i class="fas fa-fw fa-receipt"></i>
+            <span>Daftar Transaksi</span>
+        </a>
+    </li>
+
+    <hr class="sidebar-divider d-none d-md-block">
+
+    <!-- Sidebar Toggler -->
+    <div class="text-center d-none d-md-inline">
+        <button class="rounded-circle border-0" id="sidebarToggle"></button>
+    </div>
+
+</ul>
+--------------------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------------
+LANGKAH 7: PENGUJIAN DAN VERIFIKASI
+--------------------------------------------------------------------------------
+1. Cek apakah rute baru sudah terdaftar:
+   > php artisan route:list --name=transaksi
+
+2. Jalankan development server (jika belum berjalan):
+   > php artisan serve
+
+3. Buka browser pada URL:
+   http://127.0.0.1:8000/transaksi
+   atau klik menu baru "Daftar Transaksi" di sidebar sebelah kiri.
+
+4. Verifikasi isi tabel:
+   - Kolom "Nama Peminjam" tampil sesuai nama pelanggan.
+   - Kolom "Barang Dipinjam" menampilkan nama alat gunung.
+   - Kolom "Total Barang" menampilkan kuantitas (jumlah unit).
+   - Kolom "Total Harga" menampilkan format nominal rupiah (Rp).
+================================================================================
+SELESAI. FITUR DAFTAR TRANSAKSI SIAP DIGUNAKAN!
+================================================================================

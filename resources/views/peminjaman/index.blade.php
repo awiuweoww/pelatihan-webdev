@@ -1,3 +1,12 @@
+{{--
+ * Author      : Chandra
+ * Version     : 0.1.0
+ * Created     : 17-10-2026
+ * Description : Halaman daftar riwayat peminjaman alat gunung dan tabel status stok fisik.
+ *
+ * Changelog:
+ * - 0.1.0 (17-10-2026): Inisialisasi tampilan tabel data peminjaman, filter status, dan aksi CRUD.
+--}}
 @extends('layouts.admin')
 
 @section('content')
@@ -16,7 +25,7 @@
         </a>
     </div>
 
-    <!-- Alert Notifikasi Flash Session -->
+    <!-- Alert Notifikasi Sukses -->
     @if(session('success'))
         <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
             <i class="fas fa-check-circle mr-1"></i> {{ session('success') }}
@@ -26,6 +35,7 @@
         </div>
     @endif
 
+    <!-- Alert Notifikasi Error -->
     @if(session('error'))
         <div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
             <i class="fas fa-exclamation-circle mr-1"></i> {{ session('error') }}

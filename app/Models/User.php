@@ -1,5 +1,15 @@
 <?php
 
+/**
+ * Author      : Chandra
+ * Version     : 0.1.0
+ * Created     : 17-10-2026
+ * Description : Model Eloquent untuk data pengguna sistem dan otentikasi.
+ *
+ * Changelog:
+ * - 0.1.0 (17-10-2026): Inisialisasi model User dengan konfigurasi atribut fillable dan hidden.
+ */
+
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;

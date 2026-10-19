@@ -1,5 +1,15 @@
 <?php
 
+/**
+ * Author      : Chandra
+ * Version     : 0.1.0
+ * Created     : 17-10-2026
+ * Description : Form request validasi untuk transaksi peminjaman alat gunung.
+ *
+ * Changelog:
+ * - 0.1.0 (17-10-2026): Inisialisasi aturan validasi dan kustomisasi pesan error peminjaman.
+ */
+
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;

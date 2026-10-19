@@ -1,4 +1,13 @@
- <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
+{{--
+ * Author      : Chandra
+ * Version     : 0.1.0
+ * Created     : 17-10-2026
+ * Description : Komponen topbar navigasi admin dengan pencarian, notifikasi, dan menu profil.
+ *
+ * Changelog:
+ * - 0.1.0 (17-10-2026): Inisialisasi komponen navbar SB Admin 2.
+--}}
+<nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
 
                     <!-- Sidebar Toggle (Topbar) -->
                     <button id="sidebarToggleTop" class="btn btn-link d-md-none rounded-circle mr-3">

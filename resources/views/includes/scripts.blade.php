@@ -1,3 +1,12 @@
+{{--
+ * Author      : Chandra
+ * Version     : 0.1.0
+ * Created     : 17-10-2026
+ * Description : Komponen pemuatan berkas JavaScript inti (jQuery, Bootstrap, SB Admin 2).
+ *
+ * Changelog:
+ * - 0.1.0 (17-10-2026): Inisialisasi script JS pendukung antarmuka pengguna.
+--}}
 <!-- Bootstrap core JavaScript-->
 <script src="{{ asset('assets') }}/vendor/jquery/jquery.min.js"></script>
 <script src="{{ asset('assets') }}/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>

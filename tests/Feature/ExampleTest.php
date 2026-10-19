@@ -1,5 +1,15 @@
 <?php
 
+/**
+ * Author      : Chandra
+ * Version     : 0.1.0
+ * Created     : 17-10-2026
+ * Description : Pengujian dasar (Feature Test) untuk respons HTTP status halaman beranda.
+ *
+ * Changelog:
+ * - 0.1.0 (17-10-2026): Inisialisasi feature test contoh bawaan Laravel.
+ */
+
 namespace Tests\Feature;
 
 // use Illuminate\Foundation\Testing\RefreshDatabase;

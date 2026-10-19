@@ -1,5 +1,15 @@
 <?php
 
+/**
+ * Author      : Chandra
+ * Version     : 0.1.0
+ * Created     : 17-10-2026
+ * Description : Form request validasi untuk pembuatan dan pembaruan data pengguna.
+ *
+ * Changelog:
+ * - 0.1.0 (17-10-2026): Inisialisasi validasi nama, email unik, dan password pengguna.
+ */
+
 namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;

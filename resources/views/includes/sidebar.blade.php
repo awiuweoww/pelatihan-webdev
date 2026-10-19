@@ -1,4 +1,13 @@
- <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
+{{--
+ * Author      : Chandra
+ * Version     : 0.1.0
+ * Created     : 17-10-2026
+ * Description : Komponen sidebar navigasi vertikal untuk akses menu dashboard, user, dan peminjaman.
+ *
+ * Changelog:
+ * - 0.1.0 (17-10-2026): Inisialisasi menu sidebar SB Admin 2 dan penyesuaian tautan navigasi.
+--}}
+<ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
 
             <!-- Sidebar - Brand -->
             <a class="sidebar-brand d-flex align-items-center justify-content-center" href="/">

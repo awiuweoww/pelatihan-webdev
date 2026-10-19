@@ -1,3 +1,12 @@
+{{--
+ * Author      : Chandra
+ * Version     : 0.1.0
+ * Created     : 17-10-2026
+ * Description : Template layout utama berbasis SB Admin 2 untuk antarmuka dashboard admin.
+ *
+ * Changelog:
+ * - 0.1.0 (17-10-2026): Inisialisasi struktur kerangka layout admin dan modul include terpadu.
+--}}
 <!DOCTYPE html>
 <html lang="en">
 

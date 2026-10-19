@@ -1,3 +1,12 @@
+{{--
+ * Author      : Chandra
+ * Version     : 0.1.0
+ * Created     : 17-10-2026
+ * Description : Komponen pemuatan stylesheet CSS eksternal (Bootstrap, FontAwesome, SB Admin 2).
+ *
+ * Changelog:
+ * - 0.1.0 (17-10-2026): Inisialisasi asset CSS dan konfigurasi meta tag head.
+--}}
 <head>
 
     <meta charset="utf-8">

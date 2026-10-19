@@ -57,33 +57,47 @@ class PeminjamanController extends Controller
         foreach ($masterAlat as &$item) {
             // [KEAMANAN - SQL INJECTION]: Eloquent ORM menggunakan PDO Parameter Binding (Prepared Statements)
             // Nilai input dipisahkan sebagai placeholder '?' sehingga aman dari manipulasi SQL Injection.
-            // Hitung total unit yang saat ini sedang dipinjam pelanggan (belum dikembalikan)
+            // [RUMUS - BARANG SEDANG DIPINJAM]:
+            // Sedang Dipinjam = Total unit barang dengan status 'Dipinjam' (belum dikembalikan)
             $dipinjamCount = (int) Peminjaman::where('alat_dipinjam', $item['nama'])
                 ->where('status', 'Dipinjam')
                 ->sum('jumlah_pinjam');
 
             $item['sedang_dipinjam'] = $dipinjamCount;
-            // Sisa stok fisik = total kapasitas alat dikurangi yang sedang dipinjam
+
+            // [RUMUS - SISA STOK PER ALAT]:
+            // Sisa Stok = Total Kuota Fisik Gudang − Barang yang Sedang Dipinjam (Nilai minimal 0)
             $item['sisa_stok'] = max(0, $item['total'] - $dipinjamCount);
-            // Label status ketersediaan barang untuk visualisasi badge tabel
+
+            // [RUMUS - STATUS KETERSEDIAAN BADGE]:
+            // Jika Sisa Stok > 0 maka 'Tersedia', Jika Sisa Stok == 0 maka 'Habis'
             $item['status_ketersediaan'] = $item['sisa_stok'] > 0 ? 'Tersedia' : 'Habis';
 
-            // Akumulasi total kapasitas seluruh alat dan seluruh unit yang dipinjam
+            // [RUMUS - AKUMULASI TOTAL GUDANG]:
+            // Total Seluruh Unit = Akumulasi semua kuota alat
+            // Total Sedang Dipinjam = Akumulasi semua unit yang sedang dipinjam
             $totalUnitAlat += $item['total'];
             $sedangDipinjam += $dipinjamCount;
         }
         unset($item); // Melepas referensi pointer dari foreach
 
-        // Menghitung sisa unit gabungan yang masih ready di gudang
+        // [RUMUS - SISA STOK GABUNGAN GUDANG]:
+        // Sisa Stok Gabungan Tersedia = Total Kapasitas Seluruh Alat − Total Unit yang Sedang Dipinjam
         $sisaStokTersedia = max(0, $totalUnitAlat - $sedangDipinjam);
 
         // Ambil riwayat peminjaman dengan pagination 10 data per halaman, urut dari transaksi terbaru
         $peminjamans = Peminjaman::latest()->paginate(10);
 
         // Auto-generate format kode transaksi berurutan (contoh: TRX-001, TRX-002)
+        // [OPSI A - MENAIK DARI 1]:
         $last = Peminjaman::latest('id')->first();
         $nextNum = $last ? ($last->id + 1) : 1;
         $nextKodeTrx = 'TRX-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
+
+        // [OPSI B - MENURUN DARI 100]: (Hapus '//' di bawah dan beri komentar pada Opsi A jika ingin beralih)
+        // $count = Peminjaman::count();
+        // $nextNum = max(1, 100 - $count);
+        // $nextKodeTrx = 'TRX-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
 
         // Kirim data ke view peminjaman
         return view('peminjaman.peminjaman', compact(
@@ -108,7 +122,9 @@ class PeminjamanController extends Controller
     {
         $masterAlat = $this->getMasterAlat();
 
-        // Hitung sisa stok untuk masing-masing opsi alat agar peminjam tahu sisa unit yang bisa disewa
+        // [RUMUS - SISA STOK DROPDOWN OPSI]:
+        // Sisa Stok Tiap Alat = Total Kuota Fisik Gudang − Barang yang Sedang Dipinjam
+        // Agar calon peminjam dapat melihat sisa unit riil yang masih bisa disewa
         foreach ($masterAlat as &$item) {
             $dipinjamCount = (int) Peminjaman::where('alat_dipinjam', $item['nama'])
                 ->where('status', 'Dipinjam')
@@ -118,9 +134,15 @@ class PeminjamanController extends Controller
         unset($item);
 
         // Siapkan kode transaksi otomatis berikutnya
+        // [OPSI A - MENAIK DARI 1]:
         $last = Peminjaman::latest('id')->first();
         $nextNum = $last ? ($last->id + 1) : 1;
         $nextKodeTrx = 'TRX-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
+
+        // [OPSI B - MENURUN DARI 100]: (Hapus '//' di bawah dan beri komentar pada Opsi A jika ingin beralih)
+        // $count = Peminjaman::count();
+        // $nextNum = max(1, 100 - $count);
+        // $nextKodeTrx = 'TRX-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
 
         return view('peminjaman.create', compact('masterAlat', 'nextKodeTrx'));
     }
@@ -147,14 +169,19 @@ class PeminjamanController extends Controller
 
         // Validasi ketersediaan stok fisik barang sebelum memproses peminjaman
         if (isset($masterList[$alat])) {
-            // Hitung unit alat terkait yang saat ini masih dipinjam
+            // [RUMUS - BARANG SEDANG DIPINJAM]:
+            // Menghitung total unit alat terkait yang saat ini masih dipinjam
             $currentDipinjam = (int) Peminjaman::where('alat_dipinjam', $alat)
                 ->where('status', 'Dipinjam')
                 ->sum('jumlah_pinjam');
 
+            // [RUMUS - SISA STOK AKTUAL]:
+            // Sisa Stok = Total Kuota Fisik Gudang − Barang yang Sedang Dipinjam
             $sisaStok = max(0, $masterList[$alat] - $currentDipinjam);
 
-            // Jika status baru adalah 'Dipinjam' dan permintaan melebihi sisa stok, gagalkan transaksi
+            // [RUMUS VALIDASI - PENCEGAHAN OVER-BORROWING]:
+            // Syarat Tolak: Jika (Unit Sedang Dipinjam + Jumlah yang Diminta) > Total Kapasitas Gudang
+            // (Artinya: Permintaan Pengguna > Sisa Stok Tersedia)
             if ($request->status === 'Dipinjam' && ($currentDipinjam + $qty) > $masterList[$alat]) {
                 return back()
                     ->withInput()
@@ -165,9 +192,15 @@ class PeminjamanController extends Controller
         // Tentukan kode transaksi (gunakan input pengguna jika ada, atau buat otomatis)
         $kode = $request->filled('kode_transaksi') ? $request->kode_transaksi : null;
         if (!$kode) {
+            // [OPSI A - MENAIK DARI 1]:
             $last = Peminjaman::latest('id')->first();
             $nextNum = $last ? ($last->id + 1) : 1;
             $kode = 'TRX-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
+
+            // [OPSI B - MENURUN DARI 100]: (Hapus '//' di bawah dan beri komentar pada Opsi A jika ingin beralih)
+            // $count = Peminjaman::count();
+            // $nextNum = max(1, 100 - $count);
+            // $kode = 'TRX-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
         }
 
         // [KEAMANAN - SQL INJECTION & MASS ASSIGNMENT]:
@@ -201,7 +234,8 @@ class PeminjamanController extends Controller
         $masterAlat = $this->getMasterAlat();
 
         // [KEAMANAN - SQL INJECTION]: Query filtering dengan where() otomatis menggunakan PDO parameter binding
-        // Hitung stok aktual dengan mengabaikan transaksi ini (karena unit ini sudah terikat ke transaksi ini)
+        // [RUMUS - SISA STOK SAAT EDIT]:
+        // Sisa Stok = Total Kuota Fisik Gudang − Unit Dipinjam Transaksi Lain (where id != record yang sedang diedit)
         foreach ($masterAlat as &$item) {
             $dipinjamCount = (int) Peminjaman::where('alat_dipinjam', $item['nama'])
                 ->where('status', 'Dipinjam')
@@ -235,15 +269,19 @@ class PeminjamanController extends Controller
 
         // Jika status transaksi adalah 'Dipinjam', pastikan stok fisik masih memadai
         if (isset($masterList[$alat]) && $request->status === 'Dipinjam') {
+            // [RUMUS - UNIT DIPINJAM TRANSAKSI LAIN]:
             // Hitung unit yang dipinjam oleh transaksi lain (selain transaksi yang sedang diedit ini)
             $currentDipinjam = (int) Peminjaman::where('alat_dipinjam', $alat)
                 ->where('status', 'Dipinjam')
                 ->where('id', '!=', $peminjaman->id)
                 ->sum('jumlah_pinjam');
 
+            // [RUMUS - SISA STOK AKTUAL SAAT UPDATE]:
+            // Sisa Stok = Total Kuota Fisik Gudang − Unit Dipinjam Transaksi Lain
             $sisaStok = max(0, $masterList[$alat] - $currentDipinjam);
 
-            // Validasi apakah jumlah pinjam baru melebihi stok yang tersisa
+            // [RUMUS VALIDASI UPDATE - PENCEGAHAN OVER-BORROWING]:
+            // Syarat Tolak: Jika (Dipinjam Transaksi Lain + Kuantitas Update Baru) > Total Kapasitas Gudang
             if (($currentDipinjam + $qty) > $masterList[$alat]) {
                 return back()
                     ->withInput()
